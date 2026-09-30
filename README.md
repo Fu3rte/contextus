@@ -12,11 +12,15 @@
 ## 快速开始
 
 ```bash
+cd backend
 uv sync
 cp .env.example .env        # 填 EMBEDDING_API_KEY 和 LLM_API_KEY，两个服务各一套
 docker compose up -d        # pgvector，监听 5433
-uv run python tests/test_rag.py
+uv run python tests/test_chunking.py
+uv run python tests/test_pgvector_store.py
 ```
+
+后端命令（`uv run ...`）都在 `backend/` 下执行，前端命令在 `frontend/` 下执行。
 
 `.env` 里每一项都有注释，照着填即可。要点：
 
@@ -56,7 +60,9 @@ curl -X POST localhost:8000/query -H 'Content-Type: application/json' \
 
 ## 控制台前端
 
-`frontend/` 是 React + TS + Vite + shadcn 的调试界面，对应上面三个接口。
+`frontend/` 是 React + TS + Vite + shadcn 的调试界面，对应上面三个接口，源码按 feature 分层
+（`app/` 外壳、`features/qa|retrieval|ingest`、`shared/` 放 shadcn 组件与 api/hooks），细节见
+[`frontend/README.md`](frontend/README.md)。
 
 ```bash
 cd frontend && npm install && npm run dev     # http://localhost:5173
@@ -70,12 +76,12 @@ cd frontend && npm install && npm run dev     # http://localhost:5173
 
 ## 上手试试
 
-测试语料和问题清单在 [`QUESTIONS.md`](QUESTIONS.md)：`data/employee-handbook.md` 是一份虚构的员工手册，
+测试语料和问题清单在 [`QUESTIONS.md`](QUESTIONS.md)：`backend/data/employee-handbook.md` 是一份虚构的员工手册，
 清单里按「直查 / 换说法 / 精确数字 / 跨段落 / 该拒答」分组给了可以照着问的问题和预期答案。
 
 接口文档在 http://127.0.0.1:8000/docs（`uv run rag serve` 之后）。
 
-- 换自己的文档：把 `.md` / `.txt` 放进 `data/`，或换成任意目录再入库
+- 换自己的文档：把 `.md` / `.txt` 放进 `backend/data/`，或换成任意目录再入库
 - 看切分效果：改 `.env` 里的 `CHUNK_SIZE` / `CHUNK_OVERLAP`，重新入库后用 `search` 对比召回
 - 看召回质量：`uv run rag search "问题" --top-k 10`，先确认检索对了再调生成
 - 换模型或换服务商：向量侧改 `EMBEDDING_URL` / `EMBEDDING_API_KEY` / `EMBED_MODEL`，
@@ -90,7 +96,7 @@ docker exec -it rag-learning-db psql -U postgres -d rag \
 - 清空知识库重来：
 
 ```bash
-uv run python -c "from rag import db; c=db.connect(); c.cursor().execute('TRUNCATE chunks'); c.commit()"
+uv run python -c "from rag.infrastructure.pgvector_store import connect; from rag.infrastructure.settings import load_settings; c=connect(load_settings()); c.cursor().execute('TRUNCATE chunks'); c.commit()"
 ```
 
 注意：`EMBED_DIM` 改了必须重建表，向量维度是写死在表结构里的。
@@ -101,19 +107,29 @@ docker compose down -v && docker compose up -d
 
 ## 结构
 
+后端按 DDD 分层，依赖方向只能是 `interfaces → application → domain`，
+`infrastructure` 实现 `application/ports.py` 里的协议，`composition.py` 是唯一把它们接起来的地方。
+
 ```
-src/rag/
-  config.py    环境变量（向量模型与对话模型两套）
-  db.py        建表 + pgvector 检索
-  llm.py       embeddings / chat（stdlib urllib，各走各的 URL）
-  pipeline.py  切分 / 入库 / 检索 / 问答
-  api.py       FastAPI（/ingest /search /query /health）
-  cli.py       命令行入口
+backend/src/rag/
+  domain/         chunking.py 滑窗切分（纯函数）；knowledge.py TextChunk / RetrievedChunk 值对象
+  application/    ports.py Embedder / Answerer / ChunkStore 协议；use_cases.py 三个用例
+  infrastructure/ settings.py 环境配置；pgvector_store.py 建表与检索；openai_compat.py embeddings 与 chat
+  interfaces/     api.py FastAPI（/ingest /search /query /health）；cli.py 命令行入口
+  composition.py  装配：settings → 适配器 → 用例
+backend/tests/    test_chunking.py（纯逻辑）、test_pgvector_store.py（需要数据库，用假向量）
+```
+
+```
+frontend/src/
+  app/            app.tsx 外壳：页头 + 三个页签
+  features/       qa/ 问答生成、retrieval/ 检索调试、ingest/ 文档入库
+  shared/         ui/ shadcn 组件、components/ 复用件、api/client.ts、hooks/、lib/
 ```
 
 ## 已知取舍
 
-- 检索是全表精确扫描，数据量到百万级再建 HNSW 索引（`db.py` 有注释说明）
+- 检索是全表精确扫描，数据量到百万级再建 HNSW 索引（`pgvector_store.py` 有注释说明）
 - 切分只按字符数，没有做语义/标题感知切分。一块 800 字符里可能塞进四五个小节，
   带来两个副作用：相似度整体偏低，而且块开头的内容常常和问题无关、答案埋在块中间。
   想让每块尽量只讲一件事，把 `CHUNK_SIZE` 调到 300 左右重新入库。

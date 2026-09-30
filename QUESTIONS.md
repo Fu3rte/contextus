@@ -8,6 +8,7 @@
 ## 怎么跑
 
 ```bash
+cd backend
 uv run rag ingest data                              # 先入库
 uv run rag search "我一周能有几天不去公司" --top-k 3  # 只检索，不花生成的钱
 uv run rag query  "我一周能有几天不去公司" --top-k 3  # 检索 + 生成答案
@@ -95,7 +96,7 @@ uv run rag query  "我一周能有几天不去公司" --top-k 3  # 检索 + 生�
 
 ```bash
 # 看每一块到底长什么样，验证切分有没有把句子拦腰截断
-uv run python -c "from pathlib import Path; from rag import pipeline; [print(f'--- 块{i} ---\n{c[:120]}\n') for i, c in enumerate(pipeline.chunk_text(Path('data/employee-handbook.md').read_text(encoding='utf-8')))]"
+uv run python -c "from pathlib import Path; from rag.domain.chunking import split; [print(f'--- 块{i} ---\n{c[:120]}\n') for i, c in enumerate(split(Path('data/employee-handbook.md').read_text(encoding='utf-8'), 800, 120))]"
 
 # 换个 top-k 感受筛选强度
 uv run rag search "年假有几天" --top-k 1
