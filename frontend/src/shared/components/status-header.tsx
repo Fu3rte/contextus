@@ -1,4 +1,3 @@
-import { useEffect } from "react"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   Moon01Icon,
@@ -7,8 +6,6 @@ import {
   Sun02Icon,
 } from "@hugeicons/core-free-icons"
 
-import { refreshHealth, useHealth } from "@/shared/hooks/use-health"
-import { useTheme } from "@/shared/hooks/use-theme"
 import { Button } from "@/shared/ui/button"
 import {
   Item,
@@ -21,14 +18,21 @@ import { Skeleton } from "@/shared/ui/skeleton"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/shared/ui/tooltip"
 import { cn } from "cn"
 
-export function StatusHeader() {
-  const health = useHealth()
-  const { theme, toggle } = useTheme()
+export type Theme = "light" | "dark"
 
-  useEffect(() => {
-    refreshHealth()
-  }, [])
+export type HealthState =
+  | { status: "loading" }
+  | { status: "ok"; chunks: number }
+  | { status: "down"; error: string }
 
+interface StatusHeaderProps {
+  health: HealthState
+  onRefresh: () => void
+  theme: Theme
+  onToggleTheme: () => void
+}
+
+export function StatusHeader({ health, onRefresh, theme, onToggleTheme }: StatusHeaderProps) {
   return (
     <div className="ml-auto flex shrink-0 items-center gap-2">
       <Item variant="outline" size="xs" className="rounded-4xl py-0 pr-1.5 text-xs">
@@ -63,19 +67,21 @@ export function StatusHeader() {
                 variant="ghost"
                 size="icon-xs"
                 aria-label="刷新后端状态"
-                onClick={refreshHealth}
+                onClick={onRefresh}
               >
                 <HugeiconsIcon icon={Refresh01Icon} />
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              {health.error ?? "重新检查 http://127.0.0.1:8000/health"}
+              {health.status === "down"
+                ? health.error
+                : "重新检查 http://127.0.0.1:8000/health"}
             </TooltipContent>
           </Tooltip>
         </ItemActions>
       </Item>
       <Separator orientation="vertical" className="h-6" />
-      <Button variant="ghost" size="icon" aria-label="切换深浅色" onClick={toggle}>
+      <Button variant="ghost" size="icon" aria-label="切换深浅色" onClick={onToggleTheme}>
         <HugeiconsIcon icon={theme === "dark" ? Sun02Icon : Moon01Icon} />
       </Button>
     </div>

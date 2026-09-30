@@ -11,7 +11,6 @@ import { toast } from "sonner"
 import { ingest } from "@/shared/api/client"
 import type { IngestResponse } from "@/shared/api/client"
 import { RequestErrorAlert } from "@/shared/components/request-error-alert"
-import { refreshHealth } from "@/shared/hooks/use-health"
 import { Badge } from "@/shared/ui/badge"
 import { Button } from "@/shared/ui/button"
 import {
@@ -41,7 +40,7 @@ function estimateChunks(len: number) {
   return Math.max(1, Math.ceil((len - CHUNK_OVERLAP) / CHUNK_STEP))
 }
 
-export function IngestPanel() {
+export function IngestPanel({ onIngested }: { onIngested: () => void }) {
   const [source, setSource] = useState("")
   const [text, setText] = useState("")
   const [pending, setPending] = useState(false)
@@ -59,7 +58,7 @@ export function IngestPanel() {
       const res = await ingest(source.trim(), text.trim())
       setResult(res)
       toast.success(`${res.source} 已写入 ${res.chunks} 块`)
-      refreshHealth()
+      onIngested()
     } catch (err) {
       const message = (err as Error).message
       setError(message)

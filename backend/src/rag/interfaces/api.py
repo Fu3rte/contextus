@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from dataclasses import asdict
 
 from fastapi import Depends, FastAPI, Request
 from pydantic import BaseModel, Field
@@ -41,26 +42,16 @@ def ingest(payload: IngestRequest, rag: RagApplication = Depends(use_cases)):
 def search(payload: QueryRequest, rag: RagApplication = Depends(use_cases)):
     """只检索，不调 LLM。"""
     hits = rag.search.run(payload.question, payload.top_k)
-    return {"question": payload.question, "results": [hit.as_dict() for hit in hits]}
+    return {"question": payload.question, "results": [asdict(hit) for hit in hits]}
 
 
 @app.post("/query")
 def query(payload: QueryRequest, rag: RagApplication = Depends(use_cases)):
     """检索 + LLM 生成答案。"""
     answer, sources = rag.answer.run(payload.question, payload.top_k)
-    return {"answer": answer, "sources": [source.as_dict() for source in sources]}
+    return {"answer": answer, "sources": [asdict(source) for source in sources]}
 
 
 @app.get("/health")
 def health(rag: RagApplication = Depends(use_cases)):
     return {"status": "ok", "chunks": rag.store.count()}
-
-
-def main():
-    import uvicorn
-
-    uvicorn.run(app, host="127.0.0.1", port=8000)
-
-
-if __name__ == "__main__":
-    main()

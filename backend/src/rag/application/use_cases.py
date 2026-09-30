@@ -14,15 +14,11 @@ class IngestDocuments:
 
     def run(self, source: str, text: str) -> int:
         """切分 -> 向量化 -> 覆盖式入库，返回写入的块数。"""
-        chunks = [
-            TextChunk(source, index, content)
-            for index, content in enumerate(
-                split(text, self._chunk_size, self._chunk_overlap)
-            )
-        ]
-        if not chunks:
+        contents = split(text, self._chunk_size, self._chunk_overlap)
+        if not contents:
             return 0
-        return self._store.replace(chunks, self._embedder.embed([c.content for c in chunks]))
+        chunks = [TextChunk(source, index, content) for index, content in enumerate(contents)]
+        return self._store.replace(chunks, self._embedder.embed(contents))
 
 
 class SearchKnowledge:

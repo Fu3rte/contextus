@@ -1,13 +1,26 @@
+import { useCallback, useEffect, useState } from "react"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { AiSparklesIcon, Search01Icon, Upload01Icon } from "@hugeicons/core-free-icons"
 
 import { IngestPanel } from "@/features/ingest/ingest-panel"
 import { QueryPanel } from "@/features/qa/query-panel"
 import { SearchPanel } from "@/features/retrieval/search-panel"
-import { StatusHeader } from "@/shared/components/status-header"
+import { getHealth } from "@/shared/api/client"
+import { StatusHeader, type HealthState, type Theme } from "@/shared/components/status-header"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/tabs"
 import { Toaster } from "@/shared/ui/sonner"
 import { TooltipProvider } from "@/shared/ui/tooltip"
+
+const THEME_KEY = "rag-console-theme"
+
+function applyTheme(theme: Theme) {
+  document.documentElement.classList.toggle("dark", theme === "dark")
+  document.documentElement.style.colorScheme = theme
+}
+
+// 浅色为主：只有用户手动切过深色才用深色，不跟随系统偏好
+const initialTheme: Theme = localStorage.getItem(THEME_KEY) === "dark" ? "dark" : "light"
+applyTheme(initialTheme)
 
 const TABS = [
   { value: "query", label: "问答生成", icon: AiSparklesIcon },
@@ -16,6 +29,29 @@ const TABS = [
 ]
 
 export function App() {
+  const [theme, setTheme] = useState<Theme>(initialTheme)
+  const [health, setHealth] = useState<HealthState>({ status: "loading" })
+
+  const refreshHealth = useCallback(async () => {
+    try {
+      const result = await getHealth()
+      setHealth({ status: "ok", chunks: result.chunks })
+    } catch (err) {
+      setHealth({ status: "down", error: (err as Error).message })
+    }
+  }, [])
+
+  useEffect(() => {
+    refreshHealth()
+  }, [refreshHealth])
+
+  function toggleTheme() {
+    const next = theme === "dark" ? "light" : "dark"
+    localStorage.setItem(THEME_KEY, next)
+    applyTheme(next)
+    setTheme(next)
+  }
+
   return (
     <TooltipProvider>
       <div className="min-h-svh bg-muted/30">
@@ -32,7 +68,12 @@ export function App() {
                 入库 → 检索 → 生成，三段都能单独观察
               </p>
             </div>
-            <StatusHeader />
+            <StatusHeader
+              health={health}
+              onRefresh={refreshHealth}
+              theme={theme}
+              onToggleTheme={toggleTheme}
+            />
           </div>
         </header>
 
@@ -53,12 +94,12 @@ export function App() {
               <SearchPanel />
             </TabsContent>
             <TabsContent value="ingest">
-              <IngestPanel />
+              <IngestPanel onIngested={refreshHealth} />
             </TabsContent>
           </Tabs>
         </main>
       </div>
-      <Toaster position="bottom-right" />
+      <Toaster position="bottom-right" theme={theme} />
     </TooltipProvider>
   )
 }

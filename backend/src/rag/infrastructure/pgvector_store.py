@@ -3,8 +3,6 @@ from psycopg.rows import dict_row
 
 from rag.domain.knowledge import RetrievedChunk
 
-CONNECT_TIMEOUT = 5
-
 SCHEMA = """
 CREATE EXTENSION IF NOT EXISTS vector;
 
@@ -23,7 +21,7 @@ CREATE INDEX IF NOT EXISTS chunks_source_idx ON chunks (source);
 def connect(settings):
     # connect_timeout 必须显式给：端口不可达时 loopback TCP 会一直阻塞而不是报错
     return psycopg.connect(
-        settings.database_url, row_factory=dict_row, connect_timeout=CONNECT_TIMEOUT
+        settings.database_url, row_factory=dict_row, connect_timeout=5
     )
 
 
